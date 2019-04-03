@@ -4,31 +4,44 @@
 package app
 
 import (
-	"fmt"
+    "fmt"
 	"net/http"
+    "net/url"
 	"strings"
 	"time"
 
 	"github.com/avct/uasurfer"
+	"github.com/mattermost/mattermost-server/mlog"
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/mattermost/mattermost-server/plugin"
 	"github.com/mattermost/mattermost-server/store"
 )
 
 func (a *App) CheckForClientSideCert(r *http.Request) (string, string, string) {
-	pem := r.Header.Get("X-SSL-Client-Cert")                // mapped to $ssl_client_cert from nginx
-	subject := r.Header.Get("X-SSL-Client-Cert-Subject-DN") // mapped to $ssl_client_s_dn from nginx
+	pemEnc := r.Header.Get("X-Forwarded-Tls-Client-Cert")                // mapped to $ssl_client_cert from nginx
+    pem, err := url.QueryUnescape(pemEnc)
+    mlog.Error(pem)
+    if err != nil {
+        return "crtFail","",""
+    }
+	subjectEnc := r.Header.Get("X-Forwarded-Tls-Client-Cert-Infos") // mapped to $ssl_client_s_dn from nginx
+    subject, err := url.QueryUnescape(subjectEnc)
+    mlog.Error(subject)
+    if err != nil {
+        return pem,"subjectFail",""
+    }
 	email := ""
 
 	if len(subject) > 0 {
-		for _, v := range strings.Split(subject, "/") {
+		for _, v := range strings.Split(subject, ",") {
 			kv := strings.Split(v, "=")
-			if len(kv) == 2 && kv[0] == "emailAddress" {
+			if len(kv) == 2 && kv[0] == "SAN" {
 				email = kv[1]
 			}
 		}
 	}
 
+    mlog.Error(email)
 	return pem, subject, email
 }
 
